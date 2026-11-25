@@ -1,41 +1,49 @@
 import io
 import os
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
-from typing import Dict
+from typing import Dict, Tuple
 from app.tts import TTSService
 
 class TTSRequest(BaseModel):
     text: str
-    lang: str = Query("en", enum=["en", "kz", "ru"])
+    lang: str = "en"
+    voice: str = "girl"
 
 app = FastAPI()
 
-# A dictionary to hold different TTS service instances for each language
-tts_services: Dict[str, TTSService] = {}
+# One TTS service instance per (language, voice)
+tts_services: Dict[Tuple[str, str], TTSService] = {}
+
+# Models are read from TTS_MODEL_DIR (default: current dir); configs sit next to the code.
+MODEL_DIR = os.getenv("TTS_MODEL_DIR", ".")
 
 @app.on_event("startup")
 async def load_models():
     """Load all available TTS models on application startup."""
     global tts_services
-    # Define model paths and configurations for each language
+    # (lang, voice) -> file stem: vits2_<stem>.onnx and config_<stem>.json
     model_configs = {
-        "en": {"model_path": "vits2_eng_girl.onnx", "config_path": "config_eng_girl.json"},
-        "kz": {"model_path": "vits2_kaz_girl.onnx", "config_path": "config_kaz_girl.json"},
-        "ru": {"model_path": "vits2_rus_girl.onnx", "config_path": "config_rus_girl.json"},
+        ("en", "girl"): "eng_girl",
+        ("kz", "girl"): "kaz_girl",
+        ("ru", "girl"): "rus_girl",
+        ("kz", "nao"): "kaz_nao",
+        ("ru", "nao"): "rus_nao",
     }
 
-    for lang, paths in model_configs.items():
+    for (lang, voice), name in model_configs.items():
+        model_path = os.path.join(MODEL_DIR, f"vits2_{name}.onnx")
+        config_path = f"config_{name}.json"
         # Check if the files exist before loading
-        if os.path.exists(paths["model_path"]) and os.path.exists(paths["config_path"]):
-            tts_services[lang] = TTSService(
-                model_path=paths["model_path"],
-                config_path=paths["config_path"],
+        if os.path.exists(model_path) and os.path.exists(config_path):
+            tts_services[(lang, voice)] = TTSService(
+                model_path=model_path,
+                config_path=config_path,
                 lang=lang
             )
         else:
             # Handle cases where model files might be missing
-            print(f"Warning: Model files for language '{lang}' not found. Skipping.")
+            print(f"Warning: Model files for '{lang}'/'{voice}' not found. Skipping.")
 
 
 @app.post("/synthesize")
@@ -44,10 +52,10 @@ async def synthesize(req: TTSRequest):
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Text must not be empty")
 
-    # Get the appropriate TTS service based on the requested language
-    tts_service = tts_services.get(req.lang)
+    # Get the appropriate TTS service based on the requested language and voice
+    tts_service = tts_services.get((req.lang, req.voice))
     if not tts_service:
-        raise HTTPException(status_code=404, detail=f"Language '{req.lang}' is not supported.")
+        raise HTTPException(status_code=404, detail=f"Language '{req.lang}' with voice '{req.voice}' is not supported.")
 
     wav_bytes = tts_service.synthesize(req.text)
 
