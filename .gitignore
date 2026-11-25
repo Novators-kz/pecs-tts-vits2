@@ -8,3 +8,4 @@ __pycache__/
 *.py[cod]
 tts_audios/
 *.onnx
+int8/
