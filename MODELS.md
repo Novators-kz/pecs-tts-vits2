@@ -7,6 +7,13 @@ The credentials are not in this repo. They are the R2 access key pair for the
 company Cloudflare account (see the backend `.env`, `R2_*` variables, and the
 company password manager).
 
+## Languages
+
+Only three languages are used: English (`eng`, voice girl only), Kazakh (`kaz`)
+and Russian (`rus`). Kazakh and Russian also have the NAO voice. Azerbaijani
+(`az`) is dropped: there are no `az` models, configs or bucket keys, and none are
+needed.
+
 ## Bucket contents
 
 | Key | Size (bytes) | Use |
